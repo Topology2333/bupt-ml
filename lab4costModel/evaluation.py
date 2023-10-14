@@ -10,12 +10,12 @@ if __name__ == '__main__':
     test_json_file = './test_plans.json'
     train_plans, test_plans = [], []
 
-    with open(train_json_file, 'r') as f:
+    with open(train_json_file, 'r', encoding='utf-8') as f:
         train_cases = json.load(f)
     for case in train_cases:
         train_plans.append(Plan.parse_plan(case['query'], case['plan']))
 
-    with open(test_json_file, 'r') as f:
+    with open(test_json_file, 'r', encoding='utf-8') as f:
         test_cases = json.load(f)
     for case in test_cases:
         test_plans.append(Plan.parse_plan(case['query'], case['plan']))

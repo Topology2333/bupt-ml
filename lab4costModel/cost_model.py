@@ -28,21 +28,32 @@ operators = ["Projection", "Selection", "Sort", "HashAgg", "HashJoin", "TableSca
 class PlanFeatureCollector:
     def __init__(self):
         # YOUR CODE HERE: define variables to collect features from plans
-
+        self.num_nodes = 0
+        self.operator_counts = {op: 0 for op in operators}
+        self.operator_est_rows = 0
         pass
 
     def add_operator(self, op: Operator):
         # YOUR CODE HERE: extract features from op
-
-        pass
+        for u in operators:
+            if(op.id.find(u) != -1):
+                self.num_nodes += 1
+                self.operator_counts[u] += 1
+                self.operator_est_rows += float(op.est_rows)
+        # pass
 
     def walk_operator_tree(self, op: Operator):
         self.add_operator(op)
         for child in op.children:
             self.walk_operator_tree(child)
         # YOUR CODE HERE: process and return the features
+        features = [self.num_nodes]
+        for op in operators:
+            features.append(self.operator_counts[op])
+        features.append(self.operator_est_rows)
+        return features
+        # pass
 
-        pass
 
 
 class PlanDataset(torch.utils.data.Dataset):
@@ -53,9 +64,11 @@ class PlanDataset(torch.utils.data.Dataset):
             collector = PlanFeatureCollector()
             vec = collector.walk_operator_tree(plan.root)
             # YOUR CODE HERE: maybe you need padding the features if you choose the second way to extract the features.
-            
+            # print(vec)
             features = torch.Tensor(vec)
             exec_time = torch.Tensor([plan.exec_time_in_ms()])
+            # print(features)
+            # print(exec_time)
             self.data.append((features, exec_time))
 
     def __getitem__(self, index):
@@ -67,17 +80,25 @@ class PlanDataset(torch.utils.data.Dataset):
 
 # Define your model for cost estimation
 class YourModel(nn.Module):
-    def __init__(self):
+    def __init__(self, input_size):
         super().__init__()
-        # YOUR CODE HERE
+        # Define the layers of your model
+        self.fc1 = nn.Linear(12, 64)
+        self.fc2 = nn.Linear(64, 32)
+        self.fc3 = nn.Linear(32, 1)
 
     def forward(self, x):
-        # YOUR CODE HERE
-        pass
+        x = torch.relu(self.fc1(x))
+        x = torch.relu(self.fc2(x))
+        x = self.fc3(x)
+        return x
 
     def init_weights(self):
-        # YOUR CODE HERE
-        pass
+        # Initialize the weights of your model
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.xavier_uniform_(m.weight)
+                nn.init.zeros_(m.bias)
 
 
 def count_operator_num(op: Operator):
@@ -98,26 +119,53 @@ def estimate_learning(train_plans, test_plans):
     train_dataset = PlanDataset(train_plans, max_operator_num)
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=10, shuffle=False, num_workers=1)
 
-    model = YourModel()
+    model = YourModel(input_size=max_operator_num)
     model.init_weights()
 
     def loss_fn(est_time, act_time):
         # YOUR CODE HERE: define loss function
-
-        pass
+        # Calculate the absolute differences between actual and estimated times
+        abs_diff = torch.abs(act_time - est_time)
+        # Sum the absolute differences
+        loss = torch.sum(abs_diff)
+        # Divide by 'n' (number of samples)
+        loss /= len(act_time)
+        return loss
+        # pass
 
     # YOUR CODE HERE: complete training loop
-    num_epoch = 20
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    num_epoch = 40
     for epoch in range(num_epoch):
         print(f"epoch {epoch} start")
+        model.train()
+        total_loss = 0
         for i, data in enumerate(train_loader):
-            pass
+            features, exec_time = data
 
+            optimizer.zero_grad()
+            estimate_exec_time = model(features)
+            # print(estimate_exec_time) 无实意代码
+            # print("gap")
+            # print(exec_time)
+            loss = loss_fn(estimate_exec_time, exec_time)
+            
+            loss.backward()
+            optimizer.step()
+
+            total_loss += loss.item()
+        average_loss = total_loss / len(train_loader)
+        print(f"Epoch {epoch}: Average Loss: {average_loss}")
+        # pass
+    model.eval()
     train_est_times, train_act_times = [], []
     for i, data in enumerate(train_loader):
         # YOUR CODE HERE: evaluate on train data
-
-        pass
+        features, exec_time = data
+        estimated_exec_time = model(features).detach().numpy()  # Convert to NumPy array
+        train_est_times.extend(estimated_exec_time)
+        train_act_times.extend(exec_time.numpy())  # Convert to NumPy array
+        # pass
 
     test_dataset = PlanDataset(test_plans, max_operator_num)
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=10, shuffle=True, num_workers=1)
@@ -125,7 +173,10 @@ def estimate_learning(train_plans, test_plans):
     test_est_times, test_act_times = [], []
     for i, data in enumerate(test_loader):
         # YOUR CODE HERE: evaluate on test data
-
-        pass
-
+        features, exec_time = data
+        outputs = model(features)
+        test_est_times.extend(outputs.tolist())
+        test_act_times.extend(exec_time.tolist())
+        # pass
+    
     return train_est_times, train_act_times, test_est_times, test_act_times
