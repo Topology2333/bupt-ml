@@ -31,15 +31,16 @@ class PlanFeatureCollector:
         self.num_nodes = 0
         self.operator_counts = {op: 0 for op in operators}
         self.operator_est_rows = 0
-        pass
+        # pass
 
     def add_operator(self, op: Operator):
         # YOUR CODE HERE: extract features from op
+        self.operator_est_rows += op.est_row_counts();
         for u in operators:
             if(op.id.find(u) != -1):
                 self.num_nodes += 1
                 self.operator_counts[u] += 1
-                self.operator_est_rows += float(op.est_rows)
+                break
         # pass
 
     def walk_operator_tree(self, op: Operator):
@@ -83,14 +84,10 @@ class YourModel(nn.Module):
     def __init__(self, input_size):
         super().__init__()
         # Define the layers of your model
-        self.fc1 = nn.Linear(12, 64)
-        self.fc2 = nn.Linear(64, 32)
-        self.fc3 = nn.Linear(32, 1)
+        self.fc = nn.Linear(12, 1)
 
     def forward(self, x):
-        x = torch.relu(self.fc1(x))
-        x = torch.relu(self.fc2(x))
-        x = self.fc3(x)
+        x = self.fc(x)
         return x
 
     def init_weights(self):
@@ -125,17 +122,13 @@ def estimate_learning(train_plans, test_plans):
     def loss_fn(est_time, act_time):
         # YOUR CODE HERE: define loss function
         # Calculate the absolute differences between actual and estimated times
-        abs_diff = torch.abs(act_time - est_time)
-        # Sum the absolute differences
-        loss = torch.sum(abs_diff)
-        # Divide by 'n' (number of samples)
-        loss /= len(act_time)
+        loss = nn.MSELoss()(est_time, act_time)
         return loss
         # pass
 
     # YOUR CODE HERE: complete training loop
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-    num_epoch = 40
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.0005)
+    num_epoch = 60
     for epoch in range(num_epoch):
         print(f"epoch {epoch} start")
         model.train()
@@ -145,14 +138,9 @@ def estimate_learning(train_plans, test_plans):
 
             optimizer.zero_grad()
             estimate_exec_time = model(features)
-            # print(estimate_exec_time) 无实意代码
-            # print("gap")
-            # print(exec_time)
             loss = loss_fn(estimate_exec_time, exec_time)
-            
             loss.backward()
             optimizer.step()
-
             total_loss += loss.item()
         average_loss = total_loss / len(train_loader)
         print(f"Epoch {epoch}: Average Loss: {average_loss}")

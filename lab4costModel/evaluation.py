@@ -26,8 +26,9 @@ if __name__ == '__main__':
         act_times.append(p.exec_time_in_ms())
         tidb_costs.append(p.tidb_est_cost())
 
-    _, _, est_learning_costs, act_learning_times = estimate_learning(train_plans, test_plans)
+    est_training_costs, act_training_costs, est_learning_costs, act_learning_times = estimate_learning(train_plans, test_plans)
 
+    draw_act_est_figure("traing", est_training_costs, act_training_costs, True)
     draw_act_est_figure("tidb", tidb_costs, act_times, True)
     draw_act_est_figure("learning", est_learning_costs, act_learning_times, True)
 
